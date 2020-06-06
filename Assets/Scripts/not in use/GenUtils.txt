@@ -1,0 +1,287 @@
+using System.Collections.Generic;
+using TMPro;
+using UnityEngine;
+
+
+
+public  static  class GenerationUtils
+{
+
+    public static List<ColorPalette> IterationColors = new List<ColorPalette>();
+
+    //public static Dictionary<int, Color> IterationColors = new Dictionary<int, Color>();
+
+
+    //public static void SetColorsDictionary(List<ColorPalette> colors)
+    //{
+
+    //    for (int i = 0; i < colors.Count; i++)
+    //    {
+    //        IterationColors.Add(colors[i].number, colors[i].Color);
+    //    }
+
+    //}
+
+    public static void Generate(RectTransform[,] mapVis, ElementData[,] map, RectTransform parent, RectTransform prefab, Vector2 gapPercent )
+    {
+        
+        Vector2 size = parent.rect.size;
+        Vector2 gap = new Vector2(gapPercent.x * size.x, gapPercent.y * size.y) / 100;
+        size.x -= gap.x * 2;
+        size.y -= gap.y * 2;
+
+
+        float csX = size.x / map.GetLength(1);
+        float csY = size.y / map.GetLength(0);
+
+
+        float cellSize = (csX < csY) ? csX : csY;
+        float pX = cellSize / size.x;
+        float pY = cellSize / size.y;
+        Vector2 startPos = Vector2.one;
+        for (int i = 0; i < map.GetLength(0); i++)
+        {
+            for (int j = 0; j < map.GetLength(1); j++)
+            {
+                mapVis[i, j] =GameObject.Instantiate(prefab);
+
+                SetText(mapVis[i, j], map[i, j]);
+                mapVis[i, j].SetParent(parent);
+
+                mapVis[i, j].localScale =  Vector3.one;
+
+                mapVis[i, j].anchorMin = new Vector2(j*pX, i * pY);
+                mapVis[i, j].anchorMax =  new Vector2((j+1) * pX, (i+1) * pY);
+                mapVis[i, j].anchoredPosition = Vector2.zero;
+                mapVis[i, j].offsetMin = Vector2.zero;
+                mapVis[i, j].offsetMax = Vector2.zero;
+              
+            }
+        }
+
+
+
+    }
+
+
+
+    public static void ShiftMap(RectTransform[,] mapVis, ElementData[,] map, Direction dir, int max)
+    {
+        if (dir == Direction.Down)
+        {
+           
+            for (int i = 1; i < map.GetLength(0); i++)
+            {
+                for (int j = 0; j < map.GetLength(1); j++)
+                {
+                    map[i-1, j] = map[i, j];
+                    SetText(mapVis[i - 1, j], map[i - 1, j]);
+                }
+            }
+
+            for (int j = 0; j < map.GetLength(1); j++)
+            {
+                map[map.GetLength(0) - 1, j]=new ElementData() { CurrentNumber = -1 };
+                SetText(mapVis[map.GetLength(0) - 1, j], map[map.GetLength(0) - 1, j]);
+            }
+        }
+
+        else if (dir == Direction.Up)
+        {
+            for (int j = 0; j < map.GetLength(1); j++)
+            {
+                if (map[0, j].CurrentNumber - 1 == map[1, j].CurrentNumber   ||
+                    ( map[0, j].CurrentNumber==0 && map[1, j].CurrentNumber==max-1))
+                {
+                    map[1, j] = map[0, j];
+                    map[1, j].CurrentNumber += 1;
+                    //if (map[1, j].CurrentNumber == max)
+                    //    map[1, j].CurrentNumber = 0;
+                    map[1, j].IterationsCount++;
+                    SetText(mapVis[1, j], map[1, j]);
+                    map[0, j] = new ElementData() { CurrentNumber = -1 };
+
+                    SetText(mapVis[0, j], map[0, j]);
+                    if (map[1, j].CurrentNumber == max)
+                    {
+                        for (int i = 2; i < map.GetLength(0) ; i++)
+                        {
+                            map[i - 1, j] = map[i, j];
+                            SetText(mapVis[i - 1, j], map[i - 1, j]);
+                        }
+                        map[map.GetLength(0) - 1, j] = new ElementData() { CurrentNumber = -1 };
+                        SetText(mapVis[map.GetLength(0) - 1, j], map[map.GetLength(0) - 1, j]);
+                    }
+                   
+                    continue;
+                }
+                for (int i = map.GetLength(0) - 2; i >= 0; i--)
+                {
+                    map[i + 1, j] = map[i, j];
+                    SetText(mapVis[i + 1, j], map[i + 1, j]);
+                }
+                map[0, j] = new ElementData() { CurrentNumber = -1 };
+                SetText(mapVis[0, j], map[0, j]);
+            }
+
+         
+        }
+    }
+
+
+ public   static bool  GenerateNewNumbers(RectTransform[,] mapVis, ElementData[,] map, int count, int min, int max)
+    {
+
+        List<Vector2Int> possiblePlaces = new List<Vector2Int>();
+
+        for (int j = 0; j < map.GetLength(1); j++)
+        {
+            for (int i = 1; i < map.GetLength(0); i++)
+            {
+                if (map[i, j].IsEmpty)
+                {
+                    possiblePlaces.Add(new Vector2Int(i,j));
+                    break;
+                }
+
+            }
+        }
+        if (possiblePlaces.Count == 0)
+            return false;
+        for (int i = 0; i < count  && i< possiblePlaces.Count; i++)
+        {
+            int randPlace = Random.Range(0, possiblePlaces.Count);
+            int randNumber = Random.Range(min,max);
+            map[possiblePlaces[randPlace].x, possiblePlaces[randPlace].y].CurrentNumber = randNumber;
+            SetText(mapVis[possiblePlaces[randPlace].x, possiblePlaces[randPlace].y], map[possiblePlaces[randPlace].x, possiblePlaces[randPlace].y]);
+
+            possiblePlaces.RemoveAt(randPlace);
+
+
+        }
+
+        return true;
+    }
+
+
+    public static void Move(RectTransform[,] mapVis, ElementData[,] map, Direction dir)
+    {
+
+        if (dir == Direction.Left)
+        {
+            ElementData element0 = map[0, 0];
+
+            for (int i = 1; i < map.GetLength(1); i++)
+            {
+                map[0, i - 1] = map[0, i];
+
+                SetText(mapVis[0, i - 1], map[0, i - 1]);
+            }
+
+            map[0, map.GetLength(1) - 1] = element0;
+            SetText(mapVis[0, map.GetLength(1) - 1], element0);
+        }
+        else if (dir == Direction.Right)
+        {
+            ElementData elementLast = map[0, map.GetLength(1) - 1];
+
+            for (int i = map.GetLength(1) - 2; i >=0; i--)
+            {
+                map[0, i + 1] = map[0, i];
+
+                SetText(mapVis[0, i + 1], map[0, i ]);
+            }
+
+            map[0, 0] = elementLast;
+            SetText(mapVis[0, 0], elementLast);
+        }
+    }
+
+
+    static void SetText(RectTransform textEl, ElementData elem)
+    {
+        TextMeshProUGUI text = textEl.GetComponentInChildren<TextMeshProUGUI>();
+        if (text != null)
+        {
+            Debug.Log(elem.CurrentNumber);
+            if (elem.CurrentNumber!= -1)
+                text.text = elem.CurrentNumber.ToString();
+            else
+                text.text = "";
+
+
+            text.color = IterationColors[elem.IterationsCount].Color;
+        }
+
+    }
+
+
+}
+
+//public static bool GenerateNewNumbers(RectTransform[,] mapVis, ElementData[,] map, int count, int min, int max)
+//{
+
+//    List<Vector2Int> possiblePlaces = new List<Vector2Int>();
+
+//    for (int j = 0; j < map.GetLength(1); j++)
+//    {
+//        for (int i = 1; i < map.GetLength(0); i++)
+//        {
+//            if (map[i, j].IsEmpty)
+//            {
+//                possiblePlaces.Add(new Vector2Int(i, j));
+//                break;
+//            }
+
+//        }
+//    }
+//    if (possiblePlaces.Count == 0)
+//        return false;
+//    for (int i = 0; i < count && i < possiblePlaces.Count; i++)
+//    {
+//        int randPlace = Random.Range(0, possiblePlaces.Count);
+//        int randNumber = Random.Range(min, max);
+//        map[possiblePlaces[randPlace].x, possiblePlaces[randPlace].y].CurrentNumber = randNumber;
+//        SetText(mapVis[possiblePlaces[randPlace].x, possiblePlaces[randPlace].y], map[possiblePlaces[randPlace].x, possiblePlaces[randPlace].y]);
+
+//        possiblePlaces.RemoveAt(randPlace);
+
+
+//    }
+
+//    return true;
+//}
+
+
+//public static void Move(RectTransform[,] mapVis, ElementData[,] map, Direction dir, int row)
+//{
+
+//    if (dir == Direction.Left)
+//    {
+//        ElementData element0 = map[row, 0];
+
+//        for (int i = 1; i < map.GetLength(1); i++)
+//        {
+//            map[row, i - 1] = map[row, i];
+
+//            SetText(mapVis[row, i - 1], map[row, i - 1]);
+//        }
+
+//        map[row, map.GetLength(1) - 1] = element0;
+//        SetText(mapVis[row, map.GetLength(1) - 1], element0);
+//    }
+//    else if (dir == Direction.Right)
+//    {
+//        ElementData elementLast = map[row, map.GetLength(1) - 1];
+
+//        for (int i = map.GetLength(1) - 2; i >= 0; i--)
+//        {
+//            map[row, i + 1] = map[row, i];
+
+//            SetText(mapVis[row, i + 1], map[row, i]);
+//        }
+
+//        map[row, 0] = elementLast;
+//        SetText(mapVis[row, 0], elementLast);
+//    }
+//}
